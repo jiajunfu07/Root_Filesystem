@@ -100,6 +100,76 @@ initramfs.cpio.gz and uRamdisk will be generated in ~/myworkspace/
 ```
 $ QEMU_AUDIO_DRV=none \
 qemu-system-arm -m 256M -nographic -M versatilepb -kernel ../linux-stable/arch/arm/boot/zImage \
--append "console=ttyAMA0,115200" -dtb ../linux-stable/arch/arm/boot/dts/versatile-pb.dtb \
+-append "console=ttyAMA0 rdinit=/bin/sh" -dtb ../linux-stable/arch/arm/boot/dts/versatile-pb.dtb \
 -initrd initramfs.cpio.gz
 ```
+
+## Add init program and mount vfs
+The init program is from BusyBox, it begins by reading the configuration file, /etc/inittab.(BusyBox init provide a default inittab if none is present) Create /etc/inittab file in the staging directory.
+```
+::sysinit:/etc/init.d/rcS
+::askfirst:-/bin/ash
+```
+Create /etc/init.d/rcS file in the staging directory. Mount the proc and sysfs filesystems.
+```
+#!/bin/sh
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+```
+make rcS executable.
+```
+$ cd rootfs
+$ chmod +x etc/init.d/rcS
+```
+Recreate initramfs and change rdinit=/bin/sh to rdinit=/sbin/init when booting with QEMU.
+
+## Start the log daemon process
+Add daemon to /etc/inittab
+```
+::respawn:/sbin/syslogd -n
+```
+
+## Add user accounts
+Create /etc/passwd in the staging directory
+```
+root:x:0:0:root:/root:/bin/sh
+daemon:x:1:1:daemon:/usr/sbin:/bin/false
+```
+Create /etc/shadow in the staging directory
+```
+root::10933:0:99999:7:::
+daemon:*:10933:0:99999:7:::
+```
+Create /etc/group in the staging directory
+```
+root:x:0:
+daemon:x:1:
+```
+Change the permission of the files
+```
+$ chmod 0600 /etc/passwd /etc/shadow /etc/group 
+```
+Modify inittab, Add
+```
+::respawn:/sbin/getty 115200 console
+```
+Delete 
+```
+::askfirst:-/bin/ash
+```
+Recreate ramdisk(initramfs) and try it out using QEMU.
+
+## Mount device nodes
+Checkout CONFIG_DEVTMPFS in kernel configuration using 
+```
+make ARCH=arm menuconfig
+```
+Rebuild kernel.
+Add the following to inittab.
+```
+mount -t devtmpfs devtmpfs /dev
+```
+Recreate ramdisk(initramfs) and try it out using QEMU.
+
+## Configuring the network
+Here an Ethernet interface is required
