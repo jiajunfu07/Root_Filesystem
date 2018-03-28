@@ -1,0 +1,5 @@
+::sysinit:/etc/init.d/rcS
+::respawn:/sbin/getty 115200 console
+# ::askfirst:-/bin/ash
+
+::respawn:/sbin/syslogd -n
